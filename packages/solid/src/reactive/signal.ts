@@ -25,6 +25,7 @@ export var Owner: Owner | null = null;
 export let Transition: TransitionState | null = null;
 let Scheduler: ((fn: () => void) => any) | null = null;
 let ExternalSourceFactory: ExternalSourceFactory | null = null;
+let ExternalUntrack: ExternalUntrack | null = null;
 let Listener: Computation<any> | null = null;
 let Updates: Computation<any>[] | null = null;
 let Effects: Computation<any>[] | null = null;
@@ -92,6 +93,8 @@ export interface ExternalSource {
   track: EffectFunction<any, any>;
   dispose: () => void;
 }
+
+export type ExternalUntrack = <T>(fn: Accessor<T>) => T;
 
 export type RootFunction<T> = (dispose: () => void) => T;
 
@@ -808,7 +811,11 @@ export function untrack<T>(fn: Accessor<T>): T {
   const listener = Listener;
   Listener = null;
   try {
-    return fn();
+    if (ExternalUntrack) {
+      return ExternalUntrack(fn);
+    } else {
+      return fn();
+    }
   } finally {
     Listener = listener;
   }
@@ -1198,7 +1205,7 @@ export function getSuspenseContext() {
 }
 
 // Interop
-export function enableExternalSource(factory: ExternalSourceFactory) {
+export function enableExternalSource(factory: ExternalSourceFactory, untrack?: ExternalUntrack) {
   if (ExternalSourceFactory) {
     const oldFactory = ExternalSourceFactory;
     ExternalSourceFactory = (fn, trigger) => {
@@ -1214,6 +1221,17 @@ export function enableExternalSource(factory: ExternalSourceFactory) {
     };
   } else {
     ExternalSourceFactory = factory;
+  }
+
+  if (untrack) {
+    if (ExternalUntrack) {
+      const oldUntrack = ExternalUntrack;
+      ExternalUntrack = (fn) => {
+        return untrack(() => oldUntrack(fn));
+      };
+    } else {
+      ExternalUntrack = untrack;
+    }
   }
 }
 

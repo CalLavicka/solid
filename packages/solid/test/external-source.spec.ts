@@ -1,4 +1,4 @@
-import { createRoot, createMemo, enableExternalSource } from "../src";
+import { createRoot, createMemo, enableExternalSource, untrack } from "../src";
 
 import "./MessageChannel";
 
@@ -49,6 +49,14 @@ enableExternalSource((fn, trigger) => {
       sources.delete(trigger);
     }
   };
+}, (fn) => {
+  const tmp = listener;
+  listener = null;
+  try {
+    return fn();
+  } finally {
+    listener = tmp;
+  }
 });
 
 enableExternalSource(fn => {
@@ -68,6 +76,19 @@ describe("external source", () => {
       expect(memo()).toBe(0);
       e.update(1);
       expect(memo()).toBe(1);
+      fn();
+    });
+  });
+
+  it("should untrack correctly", () => {
+    createRoot(fn => {
+      const e = new ExternalSource(0);
+      const memo = createMemo(() => {
+        return untrack(() => e.get());
+      });
+      expect(memo()).toBe(0);
+      e.update(1);
+      expect(memo()).toBe(0);
       fn();
     });
   });
